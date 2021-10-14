@@ -1,0 +1,27 @@
+# action.yml
+name: "Convert to RDF"
+description: "Converts a structured data source file to Linked Data"
+inputs:
+  input-directory:
+    description: "Directory that contains all the input files that need to be converted"
+    required: true
+  # TODO: remove this argument and iterate over all files in the directory
+  input-file:
+    description: "Data source that needs to be converted to Linked Data"
+    required: true
+  output-directory:
+    description: "Output directory for Linked Data"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: "Setup Node"
+      uses: actions/setup-node@v2
+      with:
+        node-version: "14"
+    - name: "Get yarrrml-parser"
+      run: npm i -g @rmlio/yarrrml-parser
+      shell: bash
+    - name: "Convert YARRRML rules to RML"
+      run: yarrrml-parser -i ${{ inputs.input-directory }}/${{ inputs.input-file }} -o ${{ inputs.output-directory }}/rml_rules.rml.ttl
+      shell: bash
