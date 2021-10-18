@@ -22,6 +22,28 @@ runs:
     - name: "Get yarrrml-parser"
       run: npm i -g @rmlio/yarrrml-parser
       shell: bash
+    - name: "Extract filename from the input file path"
+      id: filename-extraction
+      run: |
+        filename=$(echo `basename ${{ inputs.input-file }}` | sed -e 's/\..*//')
+        echo "::set-output name=OUTPUT_FILENAME::${filename}_output.ttl"
+      shell: bash
     - name: "Convert YARRRML rules to RML"
-      run: yarrrml-parser -i ${{ inputs.input-directory }}/${{ inputs.input-file }} -o ${{ inputs.output-directory }}/rml_rules.rml.ttl
+      run: yarrrml-parser -i ${{ inputs.input-directory }}/${{ inputs.input-file }} -o ${{ inputs.input-directory }}/rml_rules.rml.ttl
+      shell: bash
+    - name: "Get rml-mapper"
+      run: |
+        cd ${{ inputs.input-directory }}
+        curl -L https://github.com/RMLio/rmlmapper-java/releases/download/v4.12.0/rmlmapper.jar --output rmlmapper.jar
+      shell: bash
+    - name: "Convert RML rules to RDF"
+      run: |
+        cd ${{ inputs.input-directory }}
+        java -jar rmlmapper.jar -m rml_rules.rml.ttl -o ${{ steps.filename-extraction.outputs.OUTPUT_FILENAME }}
+      shell: bash
+    - name: "Copy the output file to the output directory"
+      run: mv ${{ inputs.input-directory }}/${{ steps.filename-extraction.outputs.OUTPUT_FILENAME }} ${{ inputs.output-directory }}/${{ steps.filename-extraction.outputs.OUTPUT_FILENAME }}
+      shell: bash
+    - name: "Remove temp files"
+      run: rm ${{ inputs.input-directory }}/rmlmapper.jar ${{ inputs.input-directory }}/rml_rules.rml.ttl
       shell: bash
