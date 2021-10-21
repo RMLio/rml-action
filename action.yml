@@ -3,12 +3,13 @@ name: "Convert to RDF"
 description: "Converts a structured data source file to Linked Data"
 inputs:
   input-directory:
-    description: "Directory that contains all the input files that need to be converted"
+    description: "Directory that contains all the input files that need to be converted to RDF"
     required: true
   # TODO: remove this argument and iterate over all files in the directory
-  input-file:
-    description: "Data source that needs to be converted to Linked Data"
-    required: true
+  serialization-format:
+    description: "Serialization format (nquads (default), turtle, trig, trix, jsonld, hdt)"
+    required: false
+    default: "nquads"
   output-directory:
     description: "Output directory for Linked Data"
     required: true
@@ -19,31 +20,29 @@ runs:
       uses: actions/setup-node@v2
       with:
         node-version: "14"
+
     - name: "Get yarrrml-parser"
       run: npm i -g @rmlio/yarrrml-parser
       shell: bash
-    - name: "Extract filename from the input file path"
-      id: filename-extraction
-      run: |
-        filename=$(echo `basename ${{ inputs.input-file }}` | sed -e 's/\..*//')
-        echo "::set-output name=OUTPUT_FILENAME::${filename}_output.ttl"
-      shell: bash
-    - name: "Convert YARRRML rules to RML"
-      run: yarrrml-parser -i ${{ inputs.input-directory }}/${{ inputs.input-file }} -o ${{ inputs.input-directory }}/rml_rules.rml.ttl
-      shell: bash
+
     - name: "Get rml-mapper"
       run: |
         cd ${{ inputs.input-directory }}
         curl -L https://github.com/RMLio/rmlmapper-java/releases/download/v4.12.0/rmlmapper.jar --output rmlmapper.jar
       shell: bash
-    - name: "Convert RML rules to RDF"
+
+    - name: "Convert YARRRML rules to RDF for all files"
+      # Get all files that have to be converted and run a "converter.sh" script on each file to convert YARRRML to RDF
       run: |
-        cd ${{ inputs.input-directory }}
-        java -jar rmlmapper.jar -m rml_rules.rml.ttl -o ${{ steps.filename-extraction.outputs.OUTPUT_FILENAME }}
+        chmod +x ${{ github.action_path }}/converter.sh
+        find ${{ inputs.input-directory }}/ -type f \( -iname \*.yml -o -iname \*.yaml \) | ${{ github.action_path }}/converter.sh
       shell: bash
-    - name: "Copy the output file to the output directory"
-      run: mv ${{ inputs.input-directory }}/${{ steps.filename-extraction.outputs.OUTPUT_FILENAME }} ${{ inputs.output-directory }}/${{ steps.filename-extraction.outputs.OUTPUT_FILENAME }}
-      shell: bash
-    - name: "Remove temp files"
-      run: rm ${{ inputs.input-directory }}/rmlmapper.jar ${{ inputs.input-directory }}/rml_rules.rml.ttl
+      env:
+        INPUTS_INPUT_DIRECTORY: ${{ inputs.input-directory }}
+        INPUTS_OUTPUT_DIRECTORY: ${{ inputs.output-directory }}
+        WORKING_DIRECTORY: ${{ github.workspace }}
+        SERIALIZATION_FORMAT: ${{ inputs.serialization-format }}
+
+    - name: "Remove the rml-mapper"
+      run: rm ${{ inputs.input-directory }}/rmlmapper.jar
       shell: bash
