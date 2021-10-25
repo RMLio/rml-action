@@ -5,13 +5,12 @@ inputs:
   input-directory:
     description: "Directory that contains all the input files that need to be converted to RDF"
     required: true
-  # TODO: remove this argument and iterate over all files in the directory
   serialization-format:
     description: "Serialization format (nquads (default), turtle, trig, trix, jsonld, hdt)"
     required: false
     default: "nquads"
   output-directory:
-    description: "Output directory for Linked Data"
+    description: "Output directory to store Linked Data"
     required: true
 runs:
   using: "composite"
@@ -32,7 +31,7 @@ runs:
       shell: bash
 
     - name: "Convert YARRRML rules to RDF for all files"
-      # Get all files that have to be converted and run a "converter.sh" script on each file to convert YARRRML to RDF
+      # Get all files that have to be converted and run the "converter.sh"-script on each file to convert YARRRML to RDF
       run: |
         chmod +x ${{ github.action_path }}/converter.sh
         find ${{ inputs.input-directory }}/ -type f \( -iname \*.yml -o -iname \*.yaml \) | ${{ github.action_path }}/converter.sh
@@ -43,6 +42,6 @@ runs:
         WORKING_DIRECTORY: ${{ github.workspace }}
         SERIALIZATION_FORMAT: ${{ inputs.serialization-format }}
 
-    - name: "Remove the rml-mapper"
+    - name: "Remove the rml-mapper jar file"
       run: rm ${{ inputs.input-directory }}/rmlmapper.jar
       shell: bash
