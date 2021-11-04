@@ -2,8 +2,8 @@
 name: "Convert to RDF"
 description: "Converts a structured data source file to Linked Data"
 inputs:
-  input-directory:
-    description: "Directory that contains all the input files that need to be converted to RDF"
+  global-pattern:
+    description: "Global pattern that specifies which mapping files should be converted to RDF"
     required: true
   serialization-format:
     description: "Serialization format (nquads (default), turtle, trig, trix, jsonld, hdt)"
@@ -25,23 +25,20 @@ runs:
       shell: bash
 
     - name: "Get rml-mapper"
-      run: |
-        cd ${{ inputs.input-directory }}
-        curl -L https://github.com/RMLio/rmlmapper-java/releases/download/v4.12.0/rmlmapper.jar --output rmlmapper.jar
+      run: curl -L https://github.com/RMLio/rmlmapper-java/releases/download/v4.12.0/rmlmapper.jar --output rmlmapper.jar
       shell: bash
 
     - name: "Convert YARRRML rules to RDF for all files"
       # Get all files that have to be converted and run the "converter.sh"-script on each file to convert YARRRML to RDF
       run: |
         chmod +x ${{ github.action_path }}/converter.sh
-        find ${{ inputs.input-directory }}/ -type f \( -iname \*.yml -o -iname \*.yaml \) | ${{ github.action_path }}/converter.sh
+        find . -name "${{ inputs.global-pattern }}" -type f | ${{ github.action_path }}/converter.sh
       shell: bash
       env:
-        INPUTS_INPUT_DIRECTORY: ${{ inputs.input-directory }}
         INPUTS_OUTPUT_DIRECTORY: ${{ inputs.output-directory }}
         WORKING_DIRECTORY: ${{ github.workspace }}
         SERIALIZATION_FORMAT: ${{ inputs.serialization-format }}
 
     - name: "Remove the rml-mapper jar file"
-      run: rm ${{ inputs.input-directory }}/rmlmapper.jar
+      run: rm rmlmapper.jar
       shell: bash
