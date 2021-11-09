@@ -12,33 +12,93 @@ inputs:
   output-directory:
     description: "Output directory to store Linked Data"
     required: true
+  convert-all:
+    description: "Convert all data to RDF (false (default), true)"
+    required: false
+    default: "false"
 runs:
   using: "composite"
   steps:
+    - name: "Get all YARRRML filenames"
+      # create a directory with metadata if it does not exist
+      # create a directory for the output if it does not exist
+      # save all filenames (YARRRML) that will be used for conversion
+      run: |
+        mkdir -p rml_action_meta
+        mkdir -p ${{ inputs.output-directory }}
+        find . -name "${{ inputs.global-pattern }}" -type f | grep -v ".github/workflows" > \
+          rml_action_meta/filenames.txt
+      shell: bash
+
     - name: "Setup Node"
       uses: actions/setup-node@v2
       with:
         node-version: "14"
 
     - name: "Get yarrrml-parser"
-      run: npm i -g @rmlio/yarrrml-parser
+      id: set-node-modules
+      run: |
+        NODE_MODULES_PATH=$(npm i -g @rmlio/yarrrml-parser | \
+          grep -o -m 1 ' -> .*node_modules' | sed 's/ -> //')
+        echo "::set-output name=NODE_MODULES_PATH::${NODE_MODULES_PATH}"
       shell: bash
 
+    - name: "Map YARRRML mappings to data source files"
+      # export NODE_PATH to be able to use yarrrml-parser
+      # that was installed globally instead of installing it again
+      run: |
+        cd ${{ github.action_path }}
+        export NODE_PATH=${{ steps.set-node-modules.outputs.NODE_MODULES_PATH }}
+        chmod +x datasource_mapping.js
+        npm i n-readlines
+        npm i uuid
+        npm i yamljs
+        npm i path
+        cd ${{ github.workspace }}
+        node ${{ github.action_path }}/datasource_mapping.js
+        rm rml_action_meta/filenames.txt
+      shell: bash
+
+    - name: "Check filenames and contents"
+      # decide whether the action should be fully run or not
+      # (e.g. there's no need to convert the files if nothing
+      # was changed)
+      id: check-contents
+      run: |
+        chmod +x ${{ github.action_path }}/check_contents.sh
+        set +e
+        ${{ github.action_path }}/check_contents.sh
+        [ $? == 1 ] && RUN_ACTION="true" || RUN_ACTION="false"
+        set -e
+        echo "::set-output name=RUN_ACTION::${RUN_ACTION}"
+      shell: bash
+      env:
+        WORKING_DIRECTORY: ${{ github.workspace }}
+        GLOBAL_PATTERN: ${{ inputs.global-pattern }}
+        CONVERT_ALL: ${{ inputs.convert-all }}
+        RUN_ACTION: "false"
+
     - name: "Get rml-mapper"
-      run: curl -L https://github.com/RMLio/rmlmapper-java/releases/download/v4.12.0/rmlmapper.jar --output rmlmapper.jar
+      if: ${{ steps.check-contents.outputs.RUN_ACTION == 'true' }}
+      run: |
+        curl -L https://github.com/RMLio/rmlmapper-java/releases/download/v4.12.0/rmlmapper.jar \
+          --output rmlmapper.jar
       shell: bash
 
     - name: "Convert YARRRML rules to RDF for all files"
-      # Get all files that have to be converted and run the "converter.sh"-script on each file to convert YARRRML to RDF
+      if: ${{ steps.check-contents.outputs.RUN_ACTION == 'true' }}
+      # run the "converter.sh"-script to convert YARRRML rules to RDF rules
       run: |
         chmod +x ${{ github.action_path }}/converter.sh
-        find . -name "${{ inputs.global-pattern }}" -type f | ${{ github.action_path }}/converter.sh
+        ${{ github.action_path }}/converter.sh
       shell: bash
       env:
         INPUTS_OUTPUT_DIRECTORY: ${{ inputs.output-directory }}
         WORKING_DIRECTORY: ${{ github.workspace }}
         SERIALIZATION_FORMAT: ${{ inputs.serialization-format }}
+        CONVERT_ALL: ${{ inputs.convert-all }}
 
     - name: "Remove the rml-mapper jar file"
+      if: ${{ steps.check-contents.outputs.RUN_ACTION == 'true' }}
       run: rm rmlmapper.jar
       shell: bash
